@@ -14,14 +14,7 @@ export interface Migration {
   up: (db: Database.Database) => void;
 }
 
-const migrations: Migration[] = [
-  migration001,
-  migration002,
-  migration003,
-  migration004,
-  migration005,
-  migration007,
-];
+const migrations: Migration[] = [migration001, migration002, migration003, migration004, migration005, migration007];
 
 export function runMigrations(db: Database.Database): void {
   db.exec(`
