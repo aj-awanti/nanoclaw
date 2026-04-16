@@ -21,7 +21,7 @@ import { DATA_DIR } from '../config.js';
 import { log } from '../log.js';
 
 export type PairingIntent = 'main' | { kind: 'wire-to'; folder: string } | { kind: 'new-agent'; folder: string };
-export type PairingStatus = 'pending' | 'consumed' | 'expired' | 'unknown';
+export type PairingStatus = 'pending' | 'consumed' | 'invalidated' | 'unknown';
 
 export interface ConsumedDetails {
   platformId: string;
@@ -42,7 +42,6 @@ export interface PairingRecord {
   code: string;
   intent: PairingIntent;
   createdAt: string;
-  expiresAt: string;
   status: Exclude<PairingStatus, 'unknown'>;
   consumed?: ConsumedDetails;
   /** Recent pairing attempts observed while this record was pending. Capped. */
@@ -60,7 +59,7 @@ interface Store {
   pairings: PairingRecord[];
 }
 
-const DEFAULT_TTL_MS = 5 * 60 * 1000;
+/** Pairing codes do not expire — they are consumed on match or invalidated by wrong guesses. */
 const FILE_NAME = 'telegram-pairings.json';
 
 let storePathOverride: string | null = null;
@@ -98,15 +97,11 @@ function writeStore(store: Store): void {
   fs.renameSync(tmp, p);
 }
 
-function sweep(store: Store, now: number): boolean {
-  let changed = false;
-  for (const r of store.pairings) {
-    if (r.status === 'pending' && Date.parse(r.expiresAt) <= now) {
-      r.status = 'expired';
-      changed = true;
-    }
-  }
-  return changed;
+/** Clean up old consumed/invalidated records (keep last 50). */
+function sweep(store: Store): boolean {
+  if (store.pairings.length <= 50) return false;
+  store.pairings = store.pairings.slice(-50);
+  return true;
 }
 
 function generateCode(active: Set<string>): string {
@@ -120,36 +115,29 @@ function generateCode(active: Set<string>): string {
   throw new Error('Could not allocate a free pairing code (too many active).');
 }
 
-export interface CreatePairingOptions {
-  ttlMs?: number;
-}
-
-export async function createPairing(intent: PairingIntent, opts: CreatePairingOptions = {}): Promise<PairingRecord> {
-  const ttl = opts.ttlMs ?? DEFAULT_TTL_MS;
+export async function createPairing(intent: PairingIntent): Promise<PairingRecord> {
   return withLock(() => {
     const store = readStore();
-    sweep(store, Date.now());
+    sweep(store);
     // Replace-by-default: a new pairing for an intent supersedes any existing
     // pending pairing for the same intent. Old waitForPairing calls observe
-    // `expired` and exit on their own.
+    // `invalidated` and exit on their own.
     for (const r of store.pairings) {
       if (r.status === 'pending' && intentEquals(r.intent, intent)) {
-        r.status = 'expired';
+        r.status = 'invalidated';
         log.info('Pairing superseded by new request', { code: r.code, intent });
       }
     }
     const active = new Set(store.pairings.filter((r) => r.status === 'pending').map((r) => r.code));
-    const now = new Date();
     const record: PairingRecord = {
       code: generateCode(active),
       intent,
-      createdAt: now.toISOString(),
-      expiresAt: new Date(now.getTime() + ttl).toISOString(),
+      createdAt: new Date().toISOString(),
       status: 'pending',
     };
     store.pairings.push(record);
     writeStore(store);
-    log.info('Pairing created', { code: record.code, intent, expiresAt: record.expiresAt });
+    log.info('Pairing created', { code: record.code, intent });
     return record;
   });
 }
@@ -195,7 +183,7 @@ export async function tryConsume(input: ConsumeInput): Promise<PairingRecord | n
   return withLock(() => {
     const store = readStore();
     const now = Date.now();
-    sweep(store, now);
+    sweep(store);
     const record = store.pairings.find((r) => r.code === code && r.status === 'pending');
     if (!record) {
       // Miss: record the attempt on every currently-pending record so each
@@ -211,9 +199,9 @@ export async function tryConsume(input: ConsumeInput): Promise<PairingRecord | n
         if (r.status !== 'pending') continue;
         r.attempts = [...(r.attempts ?? []), attempt].slice(-MAX_ATTEMPTS_PER_RECORD);
         // One attempt per code. A wrong guess invalidates the pairing
-        // immediately — pair-telegram observes the `expired` signal and
+        // immediately — pair-telegram observes the `invalidated` signal and
         // auto-issues a fresh code (up to a retry cap).
-        r.status = 'expired';
+        r.status = 'invalidated';
         recorded = true;
       }
       writeStore(store);
@@ -242,7 +230,7 @@ export async function tryConsume(input: ConsumeInput): Promise<PairingRecord | n
 
 export function getStatus(code: string): PairingStatus {
   const store = readStore();
-  sweep(store, Date.now());
+  sweep(store);
   const r = store.pairings.find((p) => p.code === code);
   if (!r) return 'unknown';
   return r.status;
@@ -250,13 +238,11 @@ export function getStatus(code: string): PairingStatus {
 
 export function getPairing(code: string): PairingRecord | null {
   const store = readStore();
-  sweep(store, Date.now());
+  sweep(store);
   return store.pairings.find((p) => p.code === code) ?? null;
 }
 
 export interface WaitForPairingOptions {
-  /** Total time to wait. Defaults to the pairing's own TTL (read on each tick). */
-  timeoutMs?: number;
   /** Polling interval as a fallback when fs.watch misses an event. */
   pollMs?: number;
   /** Fires once per new attempt recorded against this pairing (misses only). */
@@ -264,16 +250,14 @@ export interface WaitForPairingOptions {
 }
 
 /**
- * Resolve when the pairing is consumed; reject when it expires or the timeout
- * elapses. Uses fs.watch as the primary signal with a slow poll fallback —
- * fs.watch is unreliable across rename-replace on some filesystems.
+ * Resolve when the pairing is consumed; reject when it is invalidated
+ * (wrong code guess). Waits indefinitely — codes do not expire.
+ * Uses fs.watch as the primary signal with a slow poll fallback.
  */
 export async function waitForPairing(code: string, opts: WaitForPairingOptions = {}): Promise<PairingRecord> {
   const pollMs = opts.pollMs ?? 1000;
-  const start = Date.now();
   const initial = getPairing(code);
   if (!initial) throw new Error(`Unknown pairing code: ${code}`);
-  const deadline = start + (opts.timeoutMs ?? Math.max(0, Date.parse(initial.expiresAt) - start));
 
   return new Promise<PairingRecord>((resolve, reject) => {
     let watcher: fs.FSWatcher | null = null;
@@ -320,16 +304,15 @@ export async function waitForPairing(code: string, opts: WaitForPairingOptions =
         resolve(r);
         return;
       }
-      if (r.status === 'expired' || Date.now() >= deadline) {
+      if (r.status === 'invalidated') {
         cleanup();
         const lastMiss = r.attempts
           ?.slice()
           .reverse()
           .find((a) => !a.matched);
-        const reason = lastMiss
-          ? `Pairing ${code} invalidated by wrong code (${lastMiss.candidate})`
-          : `Pairing ${code} expired`;
-        reject(new Error(reason));
+        reject(new Error(
+          `Pairing ${code} invalidated by wrong code${lastMiss ? ` (${lastMiss.candidate})` : ''}`
+        ));
         return;
       }
     };

@@ -64,11 +64,10 @@ describe('extractCode', () => {
 });
 
 describe('createPairing', () => {
-  it('generates a 4-digit code with TTL', async () => {
-    const r = await createPairing('main', { ttlMs: 60_000 });
+  it('generates a 4-digit code', async () => {
+    const r = await createPairing('main');
     expect(r.code).toMatch(/^\d{4}$/);
     expect(r.status).toBe('pending');
-    expect(Date.parse(r.expiresAt)).toBeGreaterThan(Date.now());
   });
 
   it('does not collide with active codes', async () => {
@@ -128,12 +127,13 @@ describe('tryConsume', () => {
     expect(second).toBeNull();
   });
 
-  it('cannot consume an expired pairing', async () => {
-    const r = await createPairing('main', { ttlMs: 1 });
-    await new Promise((res) => setTimeout(res, 10));
+  it('cannot consume an invalidated pairing', async () => {
+    const r = await createPairing('main');
+    // Invalidate by sending a wrong code
+    await tryConsume({ text: '9999', botUsername: 'b', platformId: 'p', isGroup: false });
     const out = await tryConsume({ text: `@b ${r.code}`, botUsername: 'b', platformId: 'p', isGroup: false });
     expect(out).toBeNull();
-    expect(getStatus(r.code)).toBe('expired');
+    expect(getStatus(r.code)).toBe('invalidated');
   });
 });
 
@@ -145,7 +145,7 @@ describe('getStatus', () => {
 
 describe('waitForPairing', () => {
   it('resolves when consumed', async () => {
-    const r = await createPairing('main', { ttlMs: 5000 });
+    const r = await createPairing('main');
     const p = waitForPairing(r.code, { pollMs: 50 });
     setTimeout(() => {
       tryConsume({ text: `@b ${r.code}`, botUsername: 'b', platformId: 'tg:1', isGroup: true, name: 'Group' });
@@ -155,17 +155,21 @@ describe('waitForPairing', () => {
     expect(consumed.consumed?.name).toBe('Group');
   });
 
-  it('rejects on expiry', async () => {
-    const r = await createPairing('main', { ttlMs: 100 });
-    await expect(waitForPairing(r.code, { pollMs: 30 })).rejects.toThrow(/expired/);
+  it('rejects on invalidation', async () => {
+    const r = await createPairing('main');
+    const waiter = waitForPairing(r.code, { pollMs: 30 });
+    setTimeout(() => {
+      tryConsume({ text: '0000', botUsername: 'b', platformId: 'tg:1', isGroup: false });
+    }, 60);
+    await expect(waiter).rejects.toThrow(/invalidated/);
   });
 });
 
 describe('replace-by-default', () => {
   it('supersedes an existing pending pairing with the same intent', async () => {
-    const first = await createPairing('main', { ttlMs: 60_000 });
-    const second = await createPairing('main', { ttlMs: 60_000 });
-    expect(getStatus(first.code)).toBe('expired');
+    const first = await createPairing('main');
+    const second = await createPairing('main');
+    expect(getStatus(first.code)).toBe('invalidated');
     expect(getStatus(second.code)).toBe('pending');
   });
 
@@ -176,18 +180,18 @@ describe('replace-by-default', () => {
     expect(getStatus(b.code)).toBe('pending');
   });
 
-  it('causes waitForPairing on the old code to reject as expired', async () => {
-    const first = await createPairing('main', { ttlMs: 60_000 });
+  it('causes waitForPairing on the old code to reject as invalidated', async () => {
+    const first = await createPairing('main');
     const waiter = waitForPairing(first.code, { pollMs: 30 });
     await new Promise((r) => setTimeout(r, 50));
-    await createPairing('main', { ttlMs: 60_000 });
-    await expect(waiter).rejects.toThrow(/expired/);
+    await createPairing('main');
+    await expect(waiter).rejects.toThrow(/invalidated/);
   });
 });
 
 describe('attempt tracking', () => {
   it('fires onAttempt for a wrong code, invalidates the pairing, and rejects the waiter', async () => {
-    const r = await createPairing('main', { ttlMs: 5000 });
+    const r = await createPairing('main');
     const attempts: string[] = [];
     const waiter = waitForPairing(r.code, {
       pollMs: 30,
@@ -198,11 +202,11 @@ describe('attempt tracking', () => {
     }, 60);
     await expect(waiter).rejects.toThrow(/invalidated by wrong code \(9999\)/);
     expect(attempts).toEqual(['9999']);
-    expect(getStatus(r.code)).toBe('expired');
+    expect(getStatus(r.code)).toBe('invalidated');
   });
 
   it('a correct code consumes without firing onAttempt', async () => {
-    const r = await createPairing('main', { ttlMs: 5000 });
+    const r = await createPairing('main');
     const attempts: string[] = [];
     const waiter = waitForPairing(r.code, {
       pollMs: 30,
@@ -217,7 +221,7 @@ describe('attempt tracking', () => {
   });
 
   it('ignores non-code messages and keeps the pairing pending', async () => {
-    const r = await createPairing('main', { ttlMs: 5000 });
+    const r = await createPairing('main');
     await tryConsume({ text: 'hello there', botUsername: 'b', platformId: 'p', isGroup: false });
     const after = getPairing(r.code);
     expect(after?.status).toBe('pending');
@@ -225,7 +229,7 @@ describe('attempt tracking', () => {
   });
 
   it('a second code attempt after invalidation does not match', async () => {
-    const r = await createPairing('main', { ttlMs: 5000 });
+    const r = await createPairing('main');
     await tryConsume({ text: '9999', botUsername: 'b', platformId: 'p', isGroup: false });
     const retry = await tryConsume({ text: r.code, botUsername: 'b', platformId: 'p', isGroup: false });
     expect(retry).toBeNull();
