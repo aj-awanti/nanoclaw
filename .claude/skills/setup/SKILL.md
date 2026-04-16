@@ -5,25 +5,32 @@ description: Run initial NanoClaw setup. Use when user wants to install dependen
 
 # NanoClaw Setup
 
-Run setup steps automatically. Only pause when user action is required (channel authentication, configuration choices). Setup uses `bash setup.sh` for bootstrap, then `npx tsx setup/index.ts --step <name>` for all other steps. Steps emit structured status blocks to stdout. Verbose logs go to `logs/setup.log`.
+Welcome the user to NanoClaw. Introduce yourself — you'll be walking them through the entire setup process step by step, from installing dependencies to getting their first message through. Keep it warm and brief (2-3 sentences).
 
-**Principle:** When something is broken or missing, fix it. Don't tell the user to go fix it themselves unless it genuinely requires their manual action (e.g. authenticating a channel, pasting a secret token). If a dependency is missing, install it. If a service won't start, diagnose and repair. Ask the user for permission when needed, then do the work.
+Then explain that setup involves running many shell commands (installing packages, building containers, starting services), and recommend pre-approving the standard setup commands so they don't have to confirm each one individually.
 
-**UX Note:** Use `AskUserQuestion` for multiple-choice questions only (e.g. "which credential method?"). Do NOT use it when free-text input is needed (e.g. phone numbers, tokens, paths) — just ask the question in plain text and wait for the user's reply.
+Use `AskUserQuestion` with these options:
 
-**Timeouts:** Use 5m timeouts for install and build steps.
+1. **Pre-approve (recommended)** — description: "Pre-approve standard setup commands so you don't have to confirm each one. You can review the list first if you'd like."
+2. **No thanks** — description: "I'll approve each command individually as it comes up."
+3. **Show me the list first** — description: "Show me exactly which commands will be pre-approved before I decide."
 
-**Waiting on user:** When the user needs to do something (change a setting, get a token, open a browser, etc.), stop and wait. Give clear instructions, then say "Let me know when done or if you need help." Do NOT continue to the next step. If they ask for help, give more detail, ask where they got stuck, and try to assist (e.g. open a Finder window, construct a command for them).
+If they pick option 1: read `.claude/skills/setup/setup-permissions.json` and use the Skill tool to invoke `update-config` with: "Add these permissions to the project settings allow list: <paste the JSON array>".
 
-## Pre-step: Approve Setup Commands
-
-Tell the user:
-
-> Setup runs many shell commands (installing packages, building containers, configuring services). Would you like to pre-approve these so you don't have to confirm each one?
-
-If they agree, read `.claude/skills/setup/setup-permissions.json` and use the Skill tool to invoke `update-config` with: "Add these permissions to the project settings allow list: <paste the JSON array>".
+If they pick option 3: read and display `.claude/skills/setup/setup-permissions.json`, then re-ask with just options 1 and 2.
 
 If they decline, continue — they'll approve commands individually.
+
+---
+
+**Internal guidance (do not show to user):**
+
+- Run setup steps automatically. Only pause when user action is required (channel authentication, configuration choices).
+- Setup uses `bash setup.sh` for bootstrap, then `npx tsx setup/index.ts --step <name>` for all other steps. Steps emit structured status blocks to stdout. Verbose logs go to `logs/setup.log`.
+- **Principle:** When something is broken or missing, fix it. Don't tell the user to go fix it themselves unless it genuinely requires their manual action (e.g. authenticating a channel, pasting a secret token). If a dependency is missing, install it. If a service won't start, diagnose and repair.
+- **UX Note:** Use `AskUserQuestion` for multiple-choice questions only (e.g. "which credential method?"). Do NOT use it when free-text input is needed (e.g. phone numbers, tokens, paths) — just ask the question in plain text and wait for the user's reply.
+- **Timeouts:** Use 5m timeouts for install and build steps.
+- **Waiting on user:** When the user needs to do something (change a setting, get a token, open a browser, etc.), stop and wait. Give clear instructions, then say "Let me know when done or if you need help." Do NOT continue to the next step. If they ask for help, give more detail, ask where they got stuck, and try to assist.
 
 ## 0. Git Upstream
 
