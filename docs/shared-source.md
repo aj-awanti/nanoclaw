@@ -73,7 +73,7 @@ What remains per-group (unchanged):
 
 ### Self-modification
 
-Existing config-level self-mod tools (`install_packages`, `add_mcp_server`, `request_rebuild`) mutate `container.json` and per-group images, not source. Unchanged — stays per-group.
+Existing config-level self-mod tools (`install_packages`, `add_mcp_server`) mutate `container.json` and per-group images, not source. Unchanged — stays per-group.
 
 Source-level self-modification (not yet implemented) uses staging: edits happen against a copy of `container/agent-runner/src/`, reviewed and swapped in on approval. Owner can also edit source directly.
 

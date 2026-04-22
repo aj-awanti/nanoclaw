@@ -135,9 +135,8 @@ Status: [x] done, [~] partial, [ ] not started
 - [x] list_tasks
 - [x] cancel_task / pause_task / resume_task
 - [x] create_agent (any agent, creates agent group + folder + bidirectional destinations; host re-normalizes the name, deduplicates folder, path-traversal guarded)
-- [x] install_packages (apt/npm, owner/admin approval required via `pickApprover`, strict name validation)
-- [x] add_mcp_server (owner/admin approval required via `pickApprover`)
-- [x] request_rebuild (rebuilds per-agent-group Docker image)
+- [x] install_packages (apt/npm, owner/admin approval required via `pickApprover`, strict name validation; single approval step covers the image rebuild + container restart)
+- [x] add_mcp_server (owner/admin approval required via `pickApprover`; approval triggers container restart, no image rebuild needed — bun runs TS directly)
 
 ## Scheduling
 
@@ -156,9 +155,8 @@ Status: [x] done, [~] partial, [ ] not started
 - [x] Approval flow (sensitive action -> card to admin -> approve/reject -> execute) — `pending_approvals` table, `requestApproval()` helper, reuses interactive card infra
 - [x] Agent requests dependency/package install (install_packages, admin approval, rebuild on approval)
 - [x] Self-modification — direct tools:
-  - [x] install_packages (apt/npm, admin approval, name validation both sides, max 20 per request)
-  - [x] add_mcp_server (admin approval)
-  - [x] request_rebuild (builds per-agent-group Docker image with approved packages)
+  - [x] install_packages (apt/npm, admin approval, name validation both sides, max 20 per request; on approve → handler rebuilds the image, kills the container, schedules a verify-and-report follow-up prompt)
+  - [x] add_mcp_server (admin approval; on approve → handler updates `container.json`, kills the container — no image rebuild)
   - [x] Fire-and-forget model (write request, return immediately; chat notification on approval; container killed so next wake picks up new config/image)
 - [~] OneCLI integration for human-loop approvals on credentialed requests (agent touching a credentialed resource → OneCLI gates → approval card to admin → OneCLI releases credential) — SDK 0.3.1 `configureManualApproval` wired into host, routes to admin via existing `pending_approvals` infra
 - [ ] Tunneled OneCLI dashboard for credential addition (Telegram Mini Apps aside, iMessage without Apple Business Register, Matrix, email). Signed short-lived URL → browser form served by OneCLI at 10254 → tunnel via cloudflare durable object. Value never touches the chat surface.

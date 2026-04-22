@@ -66,7 +66,7 @@ export function registerDeliveryAction(action: string, handler: ActionHandler): 
 
 **Default when action is unknown:** log `"Unknown system action"` at `warn` and return. Message is still marked delivered (it was consumed by the host, not sent to a channel).
 
-**Current consumers:** scheduling (5 actions — `schedule_task`, `cancel_task`, `pause_task`, `resume_task`, `update_task`), approvals (3 actions — `install_packages`, `request_rebuild`, `add_mcp_server`), agent-to-agent (`create_agent`, and the agent-routing branch keyed as a pseudo-action `agent_route`).
+**Current consumers:** scheduling (5 actions — `schedule_task`, `cancel_task`, `pause_task`, `resume_task`, `update_task`), approvals (2 actions — `install_packages`, `add_mcp_server`), agent-to-agent (`create_agent`, and the agent-routing branch keyed as a pseudo-action `agent_route`).
 
 ### 2. Router sender resolver + access gate
 

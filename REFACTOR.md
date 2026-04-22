@@ -128,7 +128,7 @@ The `format:fix` pre-commit hook sometimes reformats peer files *after* the comm
 
 4. **Revisit destinations + A2A capability holistically.** The destination projection invariant, dual-purpose routing+ACL table, channel vs agent destination shapes, `createMessagingGroupAgent` auto-wire coupling — more machinery than the feature warrants. Phase 3 moved it out of core intact; a redesign is warranted but scoped post-refactor.
 
-5. **Self-mod approach rethink.** Three separate MCP tools + three delivery actions + three approval handlers for what's essentially "mutate container.config.json and rebuild." Also: post-rebuild latency (host sweep waits up to 60s), and agents sometimes send redundant `add_mcp_server` + `request_rebuild` pairs. Consider collapsing into a single "apply this container-config diff" approval primitive.
+5. **Self-mod approach rethink.** _Partially addressed_ — the redundant `request_rebuild` tool was removed; approval of `install_packages` now bundles rebuild + container restart, and `add_mcp_server` approval restarts without rebuilding (bun runs TS directly). Still to consider: collapsing `install_packages` + `add_mcp_server` into a single "apply this container-config diff" approval primitive to reduce post-rebuild latency further.
 
 6. **Per-agent-group source / per-group base image.** Self-mod today layers packages/MCP on a shared base. As groups diverge (different base images, provider configs, runtime toolchains), the shared-base assumption won't scale. Scope post-refactor.
 

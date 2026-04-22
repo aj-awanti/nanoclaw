@@ -91,7 +91,7 @@ Each `/add-<name>` skill is idempotent: `git fetch origin <branch>` → copy mod
 
 One tier of agent self-modification today:
 
-1. **`install_packages` / `add_mcp_server` / `request_rebuild`** — changes to the per-agent-group container config only (apt/npm deps, wire an existing MCP server). Admin approval, rebuild, container restart. `container/agent-runner/src/mcp-tools/self-mod.ts`.
+1. **`install_packages` / `add_mcp_server`** — changes to the per-agent-group container config only (apt/npm deps, wire an existing MCP server). Single admin approval per request; on approve, the handler in `src/modules/self-mod/apply.ts` rebuilds the image when needed (`install_packages` only) and restarts the container. `container/agent-runner/src/mcp-tools/self-mod.ts`.
 
 A second tier (direct source-level self-edits via a draft/activate flow) is planned but not yet implemented.
 

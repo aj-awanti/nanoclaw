@@ -20,17 +20,16 @@
 | — | `scheduling.ts:221-266` `update_task` | **new** | Modify prompt/recurrence/processAfter/script |
 | — | `interactive.ts:36-129` `ask_user_question` | **new** | Blocking with timeout — writes to outbound.db then polls inbound.db for response |
 | — | `interactive.ts:131-166` `send_card` | **new** | Structured Chat SDK cards |
-| — | `self-mod.ts:34-74` `install_packages` | **new** | apt/npm install, regex name validation, admin approval |
-| — | `self-mod.ts:76-113` `add_mcp_server` | **new** | Wire existing MCP server |
-| — | `self-mod.ts:115-141` `request_rebuild` | **new** | Async container rebuild |
+| — | `self-mod.ts` `install_packages` | **new** | apt/npm install, regex name validation, admin approval; approval handler auto-rebuilds image and restarts container |
+| — | `self-mod.ts` `add_mcp_server` | **new** | Wire existing MCP server; approval handler restarts container (no image rebuild) |
 | — | `agents.ts:30-63` `create_agent` | **new** | Admin-only sub-agent creation; not exposed to non-admin containers |
 
 ## New tools in v2
-16 new tools split across 5 capability domains:
+15 new tools split across 5 capability domains:
 - **Message manipulation**: `send_file`, `edit_message`, `add_reaction`
 - **Scheduling**: 6 task-management tools
 - **Interactive**: `ask_user_question`, `send_card`
-- **Self-modification**: `install_packages`, `add_mcp_server`, `request_rebuild`
+- **Self-modification**: `install_packages`, `add_mcp_server`
 - **Agent management**: `create_agent`
 
 ## Missing from v2

@@ -223,7 +223,7 @@ Per-agent ACL and name-resolution map for `send_message(to="name")`. Projected i
 ```sql
 approval_id, session_id, request_id, action, payload, agent_group_id, channel_type, platform_id, platform_message_id, expires_at, status, title, options_json, created_at
 ```
-Approval queue for `install_packages`, `add_mcp_server`, `request_rebuild`, OneCLI credential flows. v1: no approval model.
+Approval queue for `install_packages`, `add_mcp_server`, OneCLI credential flows. v1: no approval model.
 
 **`unregistered_senders` (via migration 008):**
 ```sql
