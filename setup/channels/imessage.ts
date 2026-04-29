@@ -222,6 +222,19 @@ async function walkThroughFullDiskAccess(): Promise<void> {
 }
 
 async function collectRemoteCreds(): Promise<RemoteCreds> {
+  const existingUrl = process.env.IMESSAGE_SERVER_URL?.trim();
+  const existingKey = process.env.IMESSAGE_API_KEY?.trim();
+  if (existingUrl && existingKey && /^https?:\/\//i.test(existingUrl)) {
+    const reuse = ensureAnswer(await p.confirm({
+      message: `Found existing Photon credentials (${existingUrl}). Use them?`,
+      initialValue: true,
+    }));
+    if (reuse) {
+      setupLog.userInput('imessage_remote_creds', 'reused-existing');
+      return { serverUrl: existingUrl, apiKey: existingKey };
+    }
+  }
+
   p.note(
     [
       "Photon is a separate service that owns an iMessage account and",

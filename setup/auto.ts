@@ -46,6 +46,7 @@ import {
 } from './lib/setup-config-parse.js';
 import { runAdvancedScreen } from './lib/setup-config-screen.js';
 import { runWindowedStep } from './lib/windowed-runner.js';
+import { detectRegisteredGroups, detectExistingDisplayName } from './environment.js';
 import { pollHealth } from './onecli.js';
 import { getLaunchdLabel, getSystemdUnit } from '../src/install-slug.js';
 import { claudeCliAvailable, resolveTimezoneViaClaude } from './lib/tz-from-claude.js';
@@ -118,6 +119,39 @@ async function main(): Promise<void> {
         "Your system doesn't look quite right.",
         'See logs/setup-steps/ for details, then retry.',
       );
+    }
+  }
+
+  // Detect existing .env and offer to reuse it so the user doesn't have to
+  // paste credentials again on a re-run.
+  const existingEnv = detectExistingEnv();
+  if (existingEnv) {
+    const lines = Object.values(existingEnv.groups).map(
+      (g) => `  ${k.green('✓')} ${g.label}`,
+    );
+    p.note(lines.join('\n'), 'Found existing configuration');
+
+    const reuseChoice = ensureAnswer(
+      await brightSelect({
+        message: 'Use this existing environment?',
+        options: [
+          { value: 'reuse', label: 'Yes, use what I already have', hint: 'recommended' },
+          { value: 'fresh', label: 'No, start fresh' },
+        ],
+        initialValue: 'reuse',
+      }),
+    ) as 'reuse' | 'fresh';
+    setupLog.userInput('existing_env_choice', reuseChoice);
+
+    if (reuseChoice === 'reuse') {
+      for (const [key, value] of Object.entries(existingEnv.raw)) {
+        if (!process.env[key]) process.env[key] = value;
+      }
+      if (existingEnv.groups.onecli) skip.add('onecli');
+      if (detectRegisteredGroups(process.cwd())) {
+        skip.add('cli-agent');
+        skip.add('first-chat');
+      }
     }
   }
 
@@ -295,14 +329,17 @@ async function main(): Promise<void> {
   }
 
   let displayName: string | undefined;
-  const needsDisplayName = !skip.has('cli-agent') || !skip.has('channel');
-  if (needsDisplayName) {
-    const fallback = process.env.USER?.trim() || 'Operator';
+  async function resolveDisplayName(): Promise<string> {
+    if (displayName) return displayName;
     const preset = process.env.NANOCLAW_DISPLAY_NAME?.trim();
-    displayName = preset || (await askDisplayName(fallback));
+    const existing = detectExistingDisplayName(process.cwd());
+    const fallback = process.env.USER?.trim() || 'Operator';
+    displayName = preset || existing || (await askDisplayName(fallback));
+    return displayName;
   }
 
   if (!skip.has('cli-agent')) {
+    await resolveDisplayName();
     const res = await runQuietStep(
       'cli-agent',
       {
@@ -371,6 +408,9 @@ async function main(): Promise<void> {
   let channelChoice: ChannelChoice = 'skip';
   if (!skip.has('channel')) {
     channelChoice = await askChannelChoice();
+    if (channelChoice !== 'skip') {
+      await resolveDisplayName();
+    }
     if (channelChoice === 'telegram') {
       await runTelegramChannel(displayName!);
     } else if (channelChoice === 'discord') {
@@ -1009,6 +1049,56 @@ async function askChannelChoice(): Promise<ChannelChoice> {
 }
 
 // ─── interactive / env helpers ─────────────────────────────────────────
+
+interface ExistingEnvGroup {
+  label: string;
+  keys: string[];
+}
+
+const ENV_KEY_GROUPS: Record<string, { label: string; keys: string[] }> = {
+  onecli: { label: 'OneCLI', keys: ['ONECLI_URL'] },
+  telegram: { label: 'Telegram', keys: ['TELEGRAM_BOT_TOKEN'] },
+  discord: { label: 'Discord', keys: ['DISCORD_BOT_TOKEN', 'DISCORD_APPLICATION_ID', 'DISCORD_PUBLIC_KEY'] },
+  slack: { label: 'Slack', keys: ['SLACK_BOT_TOKEN', 'SLACK_SIGNING_SECRET'] },
+  signal: { label: 'Signal', keys: ['SIGNAL_ACCOUNT'] },
+  teams: { label: 'Teams', keys: ['TEAMS_APP_ID', 'TEAMS_APP_PASSWORD', 'TEAMS_APP_TENANT_ID', 'TEAMS_APP_TYPE'] },
+  whatsapp: { label: 'WhatsApp', keys: ['ASSISTANT_HAS_OWN_NUMBER'] },
+  imessage: { label: 'iMessage', keys: ['IMESSAGE_LOCAL', 'IMESSAGE_ENABLED', 'IMESSAGE_SERVER_URL', 'IMESSAGE_API_KEY'] },
+};
+
+function detectExistingEnv(): { groups: Record<string, ExistingEnvGroup>; raw: Record<string, string> } | null {
+  const envPath = path.join(process.cwd(), '.env');
+  if (!fs.existsSync(envPath)) return null;
+
+  let content: string;
+  try {
+    content = fs.readFileSync(envPath, 'utf-8');
+  } catch {
+    return null;
+  }
+
+  const raw: Record<string, string> = {};
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq < 1) continue;
+    raw[trimmed.slice(0, eq)] = trimmed.slice(eq + 1);
+  }
+
+  if (Object.keys(raw).length === 0) return null;
+
+  const groups: Record<string, ExistingEnvGroup> = {};
+  for (const [id, def] of Object.entries(ENV_KEY_GROUPS)) {
+    const found = def.keys.filter((key) => raw[key] !== undefined);
+    if (found.length > 0) {
+      groups[id] = { label: def.label, keys: found };
+    }
+  }
+
+  if (Object.keys(groups).length === 0) return null;
+  return { groups, raw };
+}
 
 function anthropicSecretExists(): boolean {
   try {

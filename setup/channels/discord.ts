@@ -239,6 +239,18 @@ async function walkThroughServerCreation(): Promise<void> {
 }
 
 async function collectDiscordToken(): Promise<string> {
+  const existing = process.env.DISCORD_BOT_TOKEN?.trim();
+  if (existing && /^[A-Za-z0-9._-]{50,}$/.test(existing)) {
+    const reuse = ensureAnswer(await p.confirm({
+      message: `Found an existing Discord bot token (${existing.slice(0, 10)}…). Use it?`,
+      initialValue: true,
+    }));
+    if (reuse) {
+      setupLog.userInput('discord_token', 'reused-existing');
+      return existing;
+    }
+  }
+
   const answer = ensureAnswer(
     await p.password({
       message: 'Paste your bot token',

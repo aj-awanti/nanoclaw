@@ -151,6 +151,18 @@ async function walkThroughAppCreation(): Promise<void> {
 }
 
 async function collectBotToken(): Promise<string> {
+  const existing = process.env.SLACK_BOT_TOKEN?.trim();
+  if (existing && existing.startsWith('xoxb-') && existing.length >= 24) {
+    const reuse = ensureAnswer(await p.confirm({
+      message: `Found an existing Slack bot token (${existing.slice(0, 10)}…). Use it?`,
+      initialValue: true,
+    }));
+    if (reuse) {
+      setupLog.userInput('slack_bot_token', 'reused-existing');
+      return existing;
+    }
+  }
+
   const answer = ensureAnswer(
     await p.password({
       message: 'Paste your Slack bot token',
@@ -172,6 +184,18 @@ async function collectBotToken(): Promise<string> {
 }
 
 async function collectSigningSecret(): Promise<string> {
+  const existing = process.env.SLACK_SIGNING_SECRET?.trim();
+  if (existing && /^[a-f0-9]{16,}$/i.test(existing)) {
+    const reuse = ensureAnswer(await p.confirm({
+      message: 'Found an existing Slack signing secret. Use it?',
+      initialValue: true,
+    }));
+    if (reuse) {
+      setupLog.userInput('slack_signing_secret', 'reused-existing');
+      return existing;
+    }
+  }
+
   const answer = ensureAnswer(
     await p.password({
       message: 'Paste your Slack signing secret',

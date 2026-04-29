@@ -59,6 +59,28 @@ export async function runTeamsChannel(_displayName: string): Promise<void> {
   const collected: Collected = {};
   const completed: string[] = [];
 
+  const existingAppId = process.env.TEAMS_APP_ID?.trim();
+  const existingPassword = process.env.TEAMS_APP_PASSWORD?.trim();
+  if (existingAppId && existingPassword) {
+    const reuse = ensureAnswer(await p.confirm({
+      message: `Found existing Teams credentials (App ID: ${existingAppId.slice(0, 8)}…). Use them?`,
+      initialValue: true,
+    }));
+    if (reuse) {
+      collected.appId = existingAppId;
+      collected.appPassword = existingPassword;
+      collected.appType = (process.env.TEAMS_APP_TYPE?.trim() as 'SingleTenant' | 'MultiTenant') || 'MultiTenant';
+      if (collected.appType === 'SingleTenant') {
+        collected.tenantId = process.env.TEAMS_APP_TENANT_ID?.trim();
+      }
+      setupLog.userInput('teams_credentials', 'reused-existing');
+      await installAdapter(collected);
+      completed.push('Adapter installed and service restarted (reused existing credentials).');
+      await finishWithHandoff(collected, completed);
+      return;
+    }
+  }
+
   printIntro();
 
   await confirmPrereqs({ collected, completed });
