@@ -302,12 +302,23 @@ async function processQuery(
         // MODULE-HOOK:scheduling-pre-task-followup:end
 
         if (keep.length === 0) return;
+        // Re-check done — the outer query may have finished while the script
+        // was awaited. Pushing into a closed stream is wasted work; the
+        // claimed messages get released by the host's processing-claim sweep.
+        if (done) return;
 
         const keptIds = keep.map((m) => m.id);
         const prompt = formatMessages(keep);
         log(`Pushing ${keep.length} follow-up message(s) into active query`);
         query.push(prompt);
         markCompleted(keptIds);
+      } catch (err) {
+        // Without this catch the rejection escapes the void IIFE and Node
+        // terminates the container on unhandled-rejection. The initial-batch
+        // path is wrapped by processQuery's outer try/catch; the follow-up
+        // path is not, so it needs its own.
+        const errMsg = err instanceof Error ? err.message : String(err);
+        log(`Follow-up poll error: ${errMsg}`);
       } finally {
         pollInFlight = false;
       }
