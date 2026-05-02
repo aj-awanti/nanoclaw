@@ -47,7 +47,7 @@ A step is **blocking** if its failure stops the bot from routing one message. Re
 
 | Blocking | Deferred |
 |---|---|
-| `1b-db`, `1d-sessions`, `2c-install-<channel>`, `2d-whatsapp-lids`, `3a-docker`, `3b-onecli`, `3e-build` | `1a-env`, `1c-groups`, `1e-tasks`, `2b-channel-auth`, `3c-auth` |
+| `1b-db`, `1d-sessions`, `2b-channel-auth`, `2c-install-<channel>`, `2d-whatsapp-lids`, `3a-docker`, `3b-onecli`, `3c-auth`, `3e-build` | `1a-env`, `1c-groups`, `1e-tasks` |
 
 ### 0b — Smoke test, then continue
 
