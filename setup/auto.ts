@@ -14,8 +14,8 @@
  *                          "Terminal Agent".
  *   NANOCLAW_SKIP          comma-separated step names to skip
  *                          (environment|container|onecli|auth|mounts|
- *                           service|cli-agent|timezone|channel|verify|
- *                           first-chat)
+ *                           service|cli-agent|timezone|channel|
+ *                           verify|first-chat)
  *
  * Timezone is auto-detected after the CLI agent step. UTC resolves are
  * confirmed with the user, and free-text replies fall through to a
@@ -434,7 +434,11 @@ async function main(): Promise<void> {
     await runTimezoneStep();
   }
 
+  // v1 → v2 migration is handled by `bash migrate-v2.sh`, not the setup flow.
+  // Users migrating from v1 run that script before (or instead of) setup.
+
   let channelChoice: ChannelChoice = 'skip';
+
   if (!skip.has('channel')) {
     channelChoice = await askChannelChoice();
     if (channelChoice !== 'skip') {
