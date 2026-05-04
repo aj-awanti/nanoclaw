@@ -104,7 +104,9 @@ echo "  ✓ Security patches will apply on the dnf-automatic.timer schedule (dai
 # build tools at image-build time.
 echo "[2b/8] Installing whisper.cpp + ffmpeg..."
 
-dnf install -y -q ffmpeg-free cmake xz tar
+# ffmpeg is NOT in AL2023's default repos. We ship a static ARM64 ffmpeg
+# inside /opt/whisper instead, which gets mounted into the container.
+dnf install -y -q cmake xz
 
 if [ ! -x /opt/whisper/build/bin/whisper-cli ] && [ ! -x /opt/whisper/main ]; then
   git clone --depth 1 https://github.com/ggerganov/whisper.cpp /opt/whisper
