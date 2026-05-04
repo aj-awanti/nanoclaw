@@ -223,7 +223,7 @@ nvm use 20
 nvm alias default 20
 
 # Install pnpm + Claude Code (needed on the instance to run install skills like
-# /add-telegram, /add-ollama-tool, /add-karpathy-llm-wiki, /use-native-credential-proxy)
+# /add-telegram, /add-ollama-tool, /add-karpathy-llm-wiki, /init-onecli)
 npm install -g pnpm@10 @anthropic-ai/claude-code
 
 echo "  Node:        $(node --version)"
@@ -635,10 +635,11 @@ echo ""
 echo "3. Install skills via Claude Code (BEFORE creating the first agent):"
 echo "   source ~/.nvm/nvm.sh && claude"
 echo "   # Then in Claude Code, run in order:"
-echo "   #   /use-native-credential-proxy"
+echo "   #   /init-onecli      # install OneCLI gateway + migrate .env to vault"
 echo "   #   /add-telegram"
 echo "   #   /add-ollama-tool"
 echo "   #   /add-karpathy-llm-wiki"
+echo "   # (Do NOT run /use-native-credential-proxy — its upstream branch is v1, breaks v2.)"
 echo ""
 echo "4. Wire the first agent (interactive):"
 echo "   bash nanoclaw.sh"

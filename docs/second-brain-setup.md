@@ -105,19 +105,28 @@ claude   # opens Claude Code in the project root
 Inside Claude Code, run these in order:
 
 ```
-/use-native-credential-proxy   # we use AWS Secrets Manager, not OneCLI
+/init-onecli                   # install + start OneCLI, migrate .env into its vault
 /add-telegram                  # Telegram channel adapter
 /add-ollama-tool               # MCP tool for Ollama inference + embeddings
 /add-karpathy-llm-wiki         # SQLite knowledge graph + wiki synthesis
 ```
 
 What each one gives you:
-- **`use-native-credential-proxy`** — reads creds from `.env` and injects them into container API requests; no OneCLI gateway needed
+- **`init-onecli`** — installs the OneCLI credential gateway, starts it on `127.0.0.1:10254`, reads our bootstrap-populated `.env`, and migrates the values into the OneCLI vault. v2's `container-runner.ts` calls `onecli.ensureAgent()` per session, so OneCLI must be running before you spawn any agent. (Don't use `/use-native-credential-proxy` — that skill still targets v1 and doesn't merge cleanly into v2 as of this writing.)
 - **`add-telegram`** — installs the Telegram channel adapter from the `channels` branch and wires it into `src/channels/`
 - **`add-ollama-tool`** — gives the agent Ollama as an MCP server so it can call local models for embeddings and inference
 - **`add-karpathy-llm-wiki`** — installs the wiki knowledge base: extraction → SQLite-backed knowledge graph with semantic retrieval via Ollama → recall (auto-injected on every invocation) → synthesis into entities/concepts/timelines
 
 Quit Claude Code (`/exit`) when these complete.
+
+**OneCLI gotcha — flip new agents to `mode all`:** After `bash nanoclaw.sh` creates your first agent, OneCLI registers it in `selective` mode (no secrets auto-injected). The container will get `401 Unauthorized` on Anthropic calls until you flip it:
+
+```bash
+onecli agents list                                  # find the new agent ID
+onecli agents set-secret-mode --id <id> --mode all  # auto-inject every matching vault secret
+```
+
+No restart needed — OneCLI looks up secrets per request.
 
 ---
 
