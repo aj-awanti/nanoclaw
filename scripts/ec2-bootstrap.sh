@@ -263,12 +263,21 @@ sudo -u "$NANOCLAW_USER" bash <<GITEOF
 set -euo pipefail
 cd /opt/nanoclaw
 
-# Clone fork
-git clone "$FORK_REPO" nanoclaw-v2
-cd nanoclaw-v2
+# Clone fork (idempotent — pull if it already exists)
+if [ -d nanoclaw-v2/.git ]; then
+  cd nanoclaw-v2
+  git fetch origin
+  git checkout main
+  git pull --ff-only origin main
+else
+  git clone "$FORK_REPO" nanoclaw-v2
+  cd nanoclaw-v2
+fi
 
-# Add upstream
-git remote add upstream "$UPSTREAM_REPO"
+# Add upstream (idempotent)
+if ! git remote get-url upstream >/dev/null 2>&1; then
+  git remote add upstream "$UPSTREAM_REPO"
+fi
 git fetch upstream
 
 echo "  Origin:   $FORK_REPO"
@@ -337,7 +346,10 @@ echo "  ✓ Dependencies installed, container built"
 # --- 8. Pull Ollama embedding model ---
 echo "[8/8] Pulling nomic-embed-text model for embeddings..."
 
-ollama pull nomic-embed-text
+# Ollama CLI panics on `$HOME is not defined` when run in SSM/run-command's
+# bare root environment. Set HOME explicitly. The daemon (running as the
+# `ollama` user) handles actual model storage; HOME is only a CLI sanity check.
+HOME="${HOME:-/root}" ollama pull nomic-embed-text
 
 echo "  ✓ nomic-embed-text ready"
 
